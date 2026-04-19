@@ -151,6 +151,8 @@ class AnalysisService:
                 "report_language": report_language,
                 "current_price": result.current_price,
                 "change_pct": result.change_pct,
+                "ma5": getattr(result, "ma5", None),
+                "bias_ma5": getattr(result, "bias_ma5", None),
                 "model_used": getattr(result, "model_used", None),
             },
             "summary": {

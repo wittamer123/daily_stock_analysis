@@ -627,6 +627,23 @@ def get_analysis_status(task_id: str) -> TaskStatus:
                 if change_pct is None:
                     change_pct = realtime_quote_raw.get('pct_chg')
 
+            ma5 = None
+            bias_ma5 = None
+            if isinstance(raw_result, dict):
+                ma5 = raw_result.get('ma5')
+                bias_ma5 = raw_result.get('bias_ma5')
+            if (ma5 is None or bias_ma5 is None) and context_snapshot and isinstance(
+                context_snapshot, dict
+            ):
+                enhanced_ctx = context_snapshot.get('enhanced_context') or {}
+                if isinstance(enhanced_ctx, dict):
+                    today = enhanced_ctx.get('today') or {}
+                    trend_a = enhanced_ctx.get('trend_analysis') or {}
+                    if ma5 is None and isinstance(today, dict):
+                        ma5 = today.get('ma5')
+                    if bias_ma5 is None and isinstance(trend_a, dict):
+                        bias_ma5 = trend_a.get('bias_ma5')
+
             # Build report from DB record so completed tasks return real data
             report_dict = AnalysisReport(
                 meta=ReportMeta(
@@ -640,6 +657,8 @@ def get_analysis_status(task_id: str) -> TaskStatus:
                     model_used=model_used,
                     current_price=current_price,
                     change_pct=change_pct,
+                    ma5=ma5,
+                    bias_ma5=bias_ma5,
                 ),
                 summary=ReportSummary(
                     sentiment_score=record.sentiment_score,
@@ -769,6 +788,8 @@ def _build_analysis_report(
         created_at=meta_data.get("created_at", datetime.now().isoformat()),
         current_price=meta_data.get("current_price"),
         change_pct=meta_data.get("change_pct"),
+        ma5=meta_data.get("ma5"),
+        bias_ma5=meta_data.get("bias_ma5"),
         model_used=normalize_model_used(meta_data.get("model_used")),
     )
 

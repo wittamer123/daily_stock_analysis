@@ -356,6 +356,16 @@ class StockAnalysisPipeline:
                     trend_result = self.trend_analyzer.analyze(df, code)
                     logger.info(f"{stock_name}({code}) 趋势分析: {trend_result.trend_status.value}, "
                               f"买入信号={trend_result.buy_signal.value}, 评分={trend_result.signal_score}")
+                    pb = trend_result.is_price_below_ma5()
+                    if pb is not None:
+                        logger.info(
+                            "%s(%s) 5日线检查: 当前价=%.4f MA5=%.4f 低于5日线=%s",
+                            stock_name,
+                            code,
+                            trend_result.current_price,
+                            trend_result.ma5,
+                            "是" if pb else "否",
+                        )
             except Exception as e:
                 logger.warning(f"{stock_name}({code}) 趋势分析失败: {e}", exc_info=True)
 
@@ -595,6 +605,7 @@ class StockAnalysisPipeline:
                 'trend_strength': trend_result.trend_strength,
                 'bias_ma5': trend_result.bias_ma5,
                 'bias_ma10': trend_result.bias_ma10,
+                'price_below_ma5': trend_result.is_price_below_ma5(),
                 'volume_status': trend_result.volume_status.value,
                 'volume_trend': trend_result.volume_trend,
                 'buy_signal': trend_result.buy_signal.value,

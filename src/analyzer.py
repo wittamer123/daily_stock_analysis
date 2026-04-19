@@ -218,6 +218,19 @@ def fill_chip_structure_if_needed(result: "AnalysisResult", chip_data: Any) -> N
 _PRICE_POS_KEYS = ("ma5", "ma10", "ma20", "bias_ma5", "bias_status", "current_price", "support_level", "resistance_level")
 
 
+def _safe_metric_float(value: Any) -> Optional[float]:
+    """Normalize numeric metrics for API (drop NaN/inf)."""
+    if value is None:
+        return None
+    try:
+        x = float(value)
+    except (TypeError, ValueError):
+        return None
+    if math.isnan(x) or math.isinf(x):
+        return None
+    return x
+
+
 def fill_price_position_if_needed(
     result: "AnalysisResult",
     trend_result: Any = None,
@@ -265,6 +278,26 @@ def fill_price_position_if_needed(
         if filled:
             dp["price_position"] = pp
             logger.info("[price_position] Filled placeholder fields from computed data")
+
+        # 顶层快照：当前价、MA5、对 MA5 偏离率(%)，供 API report.meta / to_dict 持久化
+        if trend_result:
+            m5 = _safe_metric_float(computed.get("ma5"))
+            if m5 is not None and m5 > 0:
+                result.ma5 = m5
+            bias = _safe_metric_float(computed.get("bias_ma5"))
+            if bias is not None:
+                result.bias_ma5 = bias
+        if result.current_price is None:
+            cp = _safe_metric_float(computed.get("current_price"))
+            if cp is not None and cp > 0:
+                result.current_price = cp
+        if result.current_price is None and realtime_quote:
+            rq = realtime_quote if isinstance(realtime_quote, dict) else (
+                realtime_quote.to_dict() if hasattr(realtime_quote, "to_dict") else {}
+            )
+            rp = _safe_metric_float(rq.get("price"))
+            if rp is not None and rp > 0:
+                result.current_price = rp
     except Exception as e:
         logger.warning("[price_position] Fill failed, skipping: %s", e)
 
@@ -388,6 +421,8 @@ class AnalysisResult:
     # ========== 价格数据（分析时快照）==========
     current_price: Optional[float] = None  # 分析时的股价
     change_pct: Optional[float] = None     # 分析时的涨跌幅(%)
+    ma5: Optional[float] = None            # 五日均线 MA5（与趋势分析口径一致）
+    bias_ma5: Optional[float] = None       # 对 MA5 的偏离率 / 乖离率 (%)
 
     # ========== 模型标记（Issue #528）==========
     model_used: Optional[str] = None  # 分析使用的 LLM 模型（完整名，如 gemini/gemini-2.0-flash）
@@ -430,6 +465,8 @@ class AnalysisResult:
             'error_message': self.error_message,
             'current_price': self.current_price,
             'change_pct': self.change_pct,
+            'ma5': self.ma5,
+            'bias_ma5': self.bias_ma5,
             'model_used': self.model_used,
         }
 

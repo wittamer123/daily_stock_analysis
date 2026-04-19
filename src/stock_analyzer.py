@@ -18,7 +18,7 @@
 
 import logging
 from dataclasses import dataclass, field
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from enum import Enum
 
 import pandas as pd
@@ -131,7 +131,13 @@ class TrendAnalysisResult:
     signal_score: int = 0            # 综合评分 0-100
     signal_reasons: List[str] = field(default_factory=list)
     risk_factors: List[str] = field(default_factory=list)
-    
+
+    def is_price_below_ma5(self) -> Optional[bool]:
+        """当前价是否严格低于 5 日均线（MA5）；均线或现价无效时为 None。"""
+        if self.ma5 > 0 and self.current_price > 0:
+            return self.current_price < self.ma5
+        return None
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             'code': self.code,
@@ -165,6 +171,7 @@ class TrendAnalysisResult:
             'rsi_24': self.rsi_24,
             'rsi_status': self.rsi_status.value,
             'rsi_signal': self.rsi_signal,
+            'price_below_ma5': self.is_price_below_ma5(),
         }
 
 

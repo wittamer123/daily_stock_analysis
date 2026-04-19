@@ -4,9 +4,19 @@ Unit tests for StockTrendAnalyzer._generate_signal bias and strong-trend relief 
 """
 
 import math
+import sys
 import unittest
 from unittest.mock import patch, MagicMock
 
+# Minimal stubs so `src.analyzer` can import in slim CI / dev envs
+for _dep in ("litellm", "json_repair"):
+    if _dep not in sys.modules:
+        try:
+            __import__(_dep)
+        except ModuleNotFoundError:
+            sys.modules[_dep] = MagicMock()
+
+from src.analyzer import AnalysisResult, fill_price_position_if_needed
 from src.stock_analyzer import (
     StockTrendAnalyzer,
     TrendAnalysisResult,
@@ -50,6 +60,73 @@ def _make_result(
         macd_status=macd_status,
         rsi_status=rsi_status,
     )
+
+
+class TrendAnalysisResultMa5CheckTestCase(unittest.TestCase):
+    """Tests for is_price_below_ma5 (strict below MA5)."""
+
+    def test_below_ma5_true(self) -> None:
+        r = TrendAnalysisResult(code="600519", ma5=100.0, current_price=99.0)
+        self.assertTrue(r.is_price_below_ma5())
+
+    def test_below_ma5_false_when_above(self) -> None:
+        r = TrendAnalysisResult(code="600519", ma5=100.0, current_price=101.0)
+        self.assertFalse(r.is_price_below_ma5())
+
+    def test_below_ma5_false_when_equal(self) -> None:
+        r = TrendAnalysisResult(code="600519", ma5=10.0, current_price=10.0)
+        self.assertFalse(r.is_price_below_ma5())
+
+    def test_below_ma5_none_when_data_invalid(self) -> None:
+        r = TrendAnalysisResult(code="600519")
+        self.assertIsNone(r.is_price_below_ma5())
+
+    def test_to_dict_includes_price_below_ma5(self) -> None:
+        r = TrendAnalysisResult(code="x", ma5=50.0, current_price=40.0)
+        self.assertEqual(r.to_dict().get("price_below_ma5"), True)
+
+
+class FillPricePositionMetaTestCase(unittest.TestCase):
+    """fill_price_position_if_needed sets AnalysisResult.ma5 / bias_ma5 for API meta."""
+
+    def test_sets_ma5_bias_from_trend(self) -> None:
+        result = AnalysisResult(
+            code="600519",
+            name="Test",
+            sentiment_score=50,
+            trend_prediction="震荡",
+            operation_advice="观望",
+        )
+        tr = TrendAnalysisResult(
+            code="600519",
+            ma5=100.0,
+            current_price=95.0,
+            bias_ma5=-5.0,
+        )
+        fill_price_position_if_needed(result, tr, None)
+        self.assertEqual(result.ma5, 100.0)
+        self.assertEqual(result.bias_ma5, -5.0)
+        self.assertEqual(result.current_price, 95.0)
+
+    def test_realtime_fills_current_when_missing(self) -> None:
+        result = AnalysisResult(
+            code="600519",
+            name="Test",
+            sentiment_score=50,
+            trend_prediction="震荡",
+            operation_advice="观望",
+        )
+        tr = TrendAnalysisResult(
+            code="600519",
+            ma5=50.0,
+            current_price=0.0,
+            bias_ma5=-4.0,
+        )
+        rq = MagicMock()
+        rq.to_dict.return_value = {"price": 48.5}
+        result.current_price = None
+        fill_price_position_if_needed(result, tr, rq)
+        self.assertEqual(result.current_price, 48.5)
 
 
 class StockAnalyzerBiasTestCase(unittest.TestCase):

@@ -121,6 +121,8 @@ class ReportMeta(BaseModel):
     created_at: Optional[str] = Field(None, description="创建时间")
     current_price: Optional[float] = Field(None, description="分析时股价")
     change_pct: Optional[float] = Field(None, description="分析时涨跌幅(%)")
+    ma5: Optional[float] = Field(None, description="五日均线 MA5（与趋势分析口径一致）")
+    bias_ma5: Optional[float] = Field(None, description="对 MA5 的偏离率 / 乖离率（%）")
     model_used: Optional[str] = Field(None, description="分析使用的 LLM 模型")
 
 

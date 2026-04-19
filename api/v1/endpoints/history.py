@@ -255,6 +255,20 @@ def get_history_detail(
             report_language,
         )
 
+        ma5 = raw_result.get("ma5")
+        bias_ma5 = raw_result.get("bias_ma5")
+        if (ma5 is None or bias_ma5 is None) and context_snapshot and isinstance(
+            context_snapshot, dict
+        ):
+            enhanced_ctx = context_snapshot.get("enhanced_context") or {}
+            if isinstance(enhanced_ctx, dict):
+                today = enhanced_ctx.get("today") or {}
+                trend_a = enhanced_ctx.get("trend_analysis") or {}
+                if ma5 is None and isinstance(today, dict):
+                    ma5 = today.get("ma5")
+                if bias_ma5 is None and isinstance(trend_a, dict):
+                    bias_ma5 = trend_a.get("bias_ma5")
+
         # 构建响应模型
         meta = ReportMeta(
             id=result.get("id"),
@@ -266,6 +280,8 @@ def get_history_detail(
             created_at=result.get("created_at"),
             current_price=current_price,
             change_pct=change_pct,
+            ma5=ma5,
+            bias_ma5=bias_ma5,
             model_used=normalize_model_used(result.get("model_used"))
         )
         
