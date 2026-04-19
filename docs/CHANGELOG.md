@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 <!-- 新条目格式：- [类型] 描述（类型取值：新功能/改进/修复/文档/测试/chore）-->
 <!-- 每条独立一行追加到本段末尾，无需分类标题，合并时冲突最小 -->
 
+- [改进] 批量分析汇总推送（决策仪表盘 / 简报 / 合并推送 / 飞书文档）在不少于 2 只股票时，在正文前部增加「多股价格与 MA5 一览」Markdown 对照表（当前价、MA5、乖离率），数据来自 `AnalysisResult` 或 `dashboard.price_position`。
 - [改进] 分析 API / 历史报告 `report.meta` 增加 `ma5`（五日线）与 `bias_ma5`（对 MA5 偏离率 %），与 `current_price` 一并返回；`AnalysisResult` 与 `fill_price_position_if_needed` 从趋势分析结果写入；数据库回读时优先 `raw_result`，缺失时从 `context_snapshot.enhanced_context` 兜底。
 - [改进] 趋势分析结果增加「当前价是否低于 5 日线（MA5）」判定：`TrendAnalysisResult.is_price_below_ma5()`、`to_dict` 与流水线日志及 `enhanced_context['trend_analysis']['price_below_ma5']` 一并透出，便于调度与 LLM 上下文使用。
 - [修复] 大盘复盘链路接入 `REPORT_LANGUAGE`：`REPORT_LANGUAGE=en` 时，A 股/合并复盘的 Prompt、章节标题、模板兜底文案与通知包装标题统一改为英文，避免出现英文正文外包中文标题的问题。

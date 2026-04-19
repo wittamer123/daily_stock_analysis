@@ -15,6 +15,7 @@ A股自选股智能分析系统 - 通知层
    - Pushover（手机/桌面推送）
 """
 import logging
+import math
 from datetime import datetime
 from typing import List, Dict, Any, Optional, Tuple
 from enum import Enum
@@ -255,6 +256,97 @@ class NotificationService(
             if model:
                 models.append(model)
         return list(dict.fromkeys(models))
+
+    def _extract_price_ma5_metrics(
+        self, result: AnalysisResult
+    ) -> Tuple[Optional[float], Optional[float], Optional[float]]:
+        """当前价、MA5、乖离率(%)：优先 AnalysisResult 顶层字段，其次 dashboard.price_position。"""
+
+        def _to_float(value: Any) -> Optional[float]:
+            if value is None or value == "":
+                return None
+            try:
+                x = float(value)
+            except (TypeError, ValueError):
+                return None
+            if math.isnan(x) or math.isinf(x):
+                return None
+            return x
+
+        cp = _to_float(getattr(result, "current_price", None))
+        ma5 = _to_float(getattr(result, "ma5", None))
+        bias = _to_float(getattr(result, "bias_ma5", None))
+
+        dash = getattr(result, "dashboard", None)
+        if isinstance(dash, dict):
+            pp = (dash.get("data_perspective") or {}).get("price_position") or {}
+            if isinstance(pp, dict):
+                if cp is None:
+                    cp = _to_float(pp.get("current_price"))
+                if ma5 is None:
+                    ma5 = _to_float(pp.get("ma5"))
+                if bias is None:
+                    bias = _to_float(pp.get("bias_ma5"))
+        return cp, ma5, bias
+
+    @staticmethod
+    def _md_table_cell(value: str) -> str:
+        return (value or "").replace("|", "/").replace("\n", " ").strip()
+
+    def _format_ma5_comparison_table(
+        self,
+        results: List[AnalysisResult],
+        report_language: str,
+    ) -> str:
+        """
+        多股 MA5 对照 Markdown 表（至少 2 只股票且至少有一列有效数据时输出）。
+        """
+        if not results or len(results) < 2:
+            return ""
+        labels = get_report_labels(report_language)
+        sorted_rows = sorted(results, key=lambda x: x.sentiment_score, reverse=True)
+        body_rows: List[Tuple[str, str, str, str, str]] = []
+        for r in sorted_rows:
+            cp, ma5, bias = self._extract_price_ma5_metrics(r)
+            name = self._md_table_cell(self._get_display_name(r, report_language))
+            code = self._md_table_cell(r.code or "")
+
+            def _fmt_price(v: Optional[float]) -> str:
+                if v is None:
+                    return "—"
+                return f"{v:,.2f}"
+
+            def _fmt_bias(v: Optional[float]) -> str:
+                if v is None:
+                    return "—"
+                return f"{v:+.2f}%"
+
+            body_rows.append(
+                (code, name, _fmt_price(cp), _fmt_price(ma5), _fmt_bias(bias))
+            )
+
+        if not any(
+            a != "—" or b != "—" or c != "—"
+            for (_, _, a, b, c) in body_rows
+        ):
+            return ""
+
+        h = labels["ma5_comparison_heading"]
+        c_code = labels["stock_code_column_label"]
+        c_name = labels["name_column_label"]
+        c_price = labels["current_price_label"]
+        c_ma5 = labels["ma5_label"]
+        c_bias = labels["bias_ma5_label"]
+        lines_tb = [
+            f"## 📈 {h}",
+            "",
+            f"| {c_code} | {c_name} | {c_price} | {c_ma5} | {c_bias} |",
+            "| --- | --- | ---: | ---: | ---: |",
+        ]
+        for code, name, p, m, b in body_rows:
+            lines_tb.append(f"| {code} | {name} | {p} | {m} | {b} |")
+        lines_tb.append("")
+        return "\n".join(lines_tb)
     
     def _detect_all_channels(self) -> List[NotificationChannel]:
         """
@@ -805,6 +897,9 @@ class NotificationService(
                 },
             )
             if out:
+                ma5_tbl = self._format_ma5_comparison_table(results, report_language)
+                if ma5_tbl:
+                    return f"{ma5_tbl}\n\n---\n\n{out}"
                 return out
 
         if report_date is None:
@@ -843,6 +938,14 @@ class NotificationService(
                 )
             report_lines.extend([
                 "",
+                "---",
+                "",
+            ])
+
+        ma5_block = self._format_ma5_comparison_table(sorted_results, report_language)
+        if ma5_block:
+            report_lines.extend([
+                ma5_block,
                 "---",
                 "",
             ])
@@ -1336,6 +1439,9 @@ class NotificationService(
                 extra_context={"report_language": report_language},
             )
             if out:
+                ma5_tbl = self._format_ma5_comparison_table(results, report_language)
+                if ma5_tbl:
+                    return f"{ma5_tbl}\n\n---\n\n{out}"
                 return out
         # Fallback: brief summary from dashboard report
         if not results:
@@ -1350,6 +1456,9 @@ class NotificationService(
             f"> {len(results)} {labels['stock_unit_compact']} | 🟢{buy_count} 🟡{hold_count} 🔴{sell_count}",
             "",
         ]
+        ma5_brief = self._format_ma5_comparison_table(sorted_results, report_language)
+        if ma5_brief:
+            lines.extend([ma5_brief, "---", ""])
         for r in sorted_results:
             _, emoji, _ = self._get_signal_level(r)
             name = self._get_display_name(r, report_language)

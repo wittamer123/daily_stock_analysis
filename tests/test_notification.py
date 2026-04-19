@@ -201,6 +201,58 @@ class TestNotificationServiceReportGeneration(unittest.TestCase):
         mock_brief.assert_called_once()
 
     @mock.patch("src.notification.get_config")
+    def test_ma5_comparison_table_inserts_for_multi_stock_dashboard(self, mock_get_config: mock.MagicMock):
+        mock_get_config.return_value = _make_config(report_renderer_enabled=False)
+        service = NotificationService()
+        r1 = AnalysisResult(
+            code="600519",
+            name="贵州茅台",
+            sentiment_score=72,
+            trend_prediction="看多",
+            operation_advice="持有",
+            analysis_summary="稳健",
+            current_price=1800.0,
+            ma5=1780.0,
+            bias_ma5=1.12,
+        )
+        r2 = AnalysisResult(
+            code="000001",
+            name="平安银行",
+            sentiment_score=60,
+            trend_prediction="震荡",
+            operation_advice="观望",
+            analysis_summary="中性",
+            current_price=10.5,
+            ma5=10.6,
+            bias_ma5=-0.94,
+        )
+        text = service.generate_dashboard_report([r1, r2])
+        self.assertIn("多股价格与 MA5", text)
+        self.assertIn("600519", text)
+        self.assertIn("000001", text)
+        self.assertIn("1,800.00", text)
+        self.assertIn("+1.12%", text)
+        self.assertIn("-0.94%", text)
+
+    @mock.patch("src.notification.get_config")
+    def test_ma5_comparison_table_skipped_for_single_stock(self, mock_get_config: mock.MagicMock):
+        mock_get_config.return_value = _make_config(report_renderer_enabled=False)
+        service = NotificationService()
+        r1 = AnalysisResult(
+            code="600519",
+            name="贵州茅台",
+            sentiment_score=72,
+            trend_prediction="看多",
+            operation_advice="持有",
+            analysis_summary="稳健",
+            current_price=1800.0,
+            ma5=1780.0,
+            bias_ma5=1.0,
+        )
+        text = service.generate_dashboard_report([r1])
+        self.assertNotIn("多股价格与 MA5", text)
+
+    @mock.patch("src.notification.get_config")
     def test_generate_single_stock_report_keeps_legacy_simple_format(self, mock_get_config: mock.MagicMock):
         mock_get_config.return_value = _make_config(report_renderer_enabled=True)
         service = NotificationService()
